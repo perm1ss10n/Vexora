@@ -1,3 +1,4 @@
+```md
 # Vexora Device State Machine v1 (Firmware)
 
 Цель: описать состояния устройства и переходы так, чтобы firmware, backend и app одинаково понимали,
@@ -220,6 +221,7 @@
 - `OTA_OK`
 - `OTA_FAIL`
 
+```mermaid
 stateDiagram-v2
     [*] --> BOOT
 
