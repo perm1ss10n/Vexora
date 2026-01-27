@@ -131,3 +131,78 @@ ON CONFLICT(device_id) DO UPDATE SET
 	_ = source // пока не используем, пригодится для аудита/метрик
 	return nil
 }
+func (s *SQLiteStore) UpdateState(
+	ctx context.Context,
+	deviceID string,
+	status string,
+	link *string,
+	fw *string,
+	tsMillis int64,
+) error {
+	if deviceID == "" {
+		return nil
+	}
+	if tsMillis <= 0 {
+		tsMillis = time.Now().UnixMilli()
+	}
+
+	q := `
+UPDATE devices SET
+  status = ?,
+  link = COALESCE(?, link),
+  fw = COALESCE(?, fw),
+  last_state_ts = ?,
+  last_seen_ts = ?,
+  updated_at_ts = ?
+WHERE device_id = ?;
+`
+	_, err := s.db.ExecContext(
+		ctx,
+		q,
+		status,
+		link,
+		fw,
+		tsMillis,
+		tsMillis,
+		tsMillis,
+		deviceID,
+	)
+	if err != nil {
+		return fmt.Errorf("registry update state deviceId=%s: %w", deviceID, err)
+	}
+	return nil
+}
+
+func (s *SQLiteStore) MarkOffline(
+	ctx context.Context,
+	deviceID string,
+	tsMillis int64,
+	reason string,
+) error {
+	if deviceID == "" {
+		return nil
+	}
+	if tsMillis <= 0 {
+		tsMillis = time.Now().UnixMilli()
+	}
+
+	q := `
+UPDATE devices SET
+  status = 'offline',
+  last_seen_ts = ?,
+  updated_at_ts = ?
+WHERE device_id = ?;
+`
+	_, err := s.db.ExecContext(
+		ctx,
+		q,
+		tsMillis,
+		tsMillis,
+		deviceID,
+	)
+	if err != nil {
+		return fmt.Errorf("registry mark offline deviceId=%s: %w", deviceID, err)
+	}
+	_ = reason // оставим под аудит/логи позже
+	return nil
+}
