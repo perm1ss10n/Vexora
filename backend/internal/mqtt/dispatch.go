@@ -1,6 +1,7 @@
 package mqtt
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"os"
@@ -9,14 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"context"
-
-	"github.com/perm1ss10n/vexora/backend/internal/registry"
-
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 
 	"github.com/perm1ss10n/vexora/backend/internal/influx"
 	"github.com/perm1ss10n/vexora/backend/internal/model"
+	"github.com/perm1ss10n/vexora/backend/internal/registry"
 )
 
 type Dispatcher struct {
@@ -140,15 +138,35 @@ func (d *Dispatcher) handleState(topic string, payload []byte, env model.Envelop
 
 	log.Printf("[STATE] recv topic=%s deviceId=%s status=%s ts=%d size=%d", topic, env.DeviceID, s.Status, env.Ts, len(payload))
 
+	// Registry: update state независимо от Influx
+	if d.Registry != nil {
+		var linkType *string
+		if s.Link != nil && s.Link.Type != "" {
+			linkType = &s.Link.Type
+		}
+		var fw *string
+		if s.FW != "" {
+			fw = &s.FW
+		}
+
+		_ = d.Registry.UpdateState(
+			context.Background(),
+			env.DeviceID,
+			s.Status,
+			linkType,
+			fw,
+			env.Ts,
+		)
+	}
+
+	// Influx: опционально
 	if d.Influx == nil {
 		return
 	}
 
 	ts := time.UnixMilli(env.Ts)
 
-	tags := map[string]string{
-		"deviceId": env.DeviceID,
-	}
+	tags := map[string]string{"deviceId": env.DeviceID}
 	if s.Status != "" {
 		tags["status"] = s.Status
 	}
@@ -179,9 +197,7 @@ func (d *Dispatcher) handleState(topic string, payload []byte, env model.Envelop
 			fields["cfgPendingVersion"] = *s.Cfg.PendingVersion
 		}
 	}
-
 	if len(fields) == 0 {
-		// чтобы точка не была пустой
 		fields["seen"] = 1
 	}
 
@@ -197,6 +213,16 @@ func (d *Dispatcher) handleEvent(topic string, payload []byte, env model.Envelop
 	}
 
 	log.Printf("[EVENT] recv topic=%s deviceId=%s code=%s ts=%d size=%d", topic, env.DeviceID, e.Code, env.Ts, len(payload))
+
+	// Registry: mark offline by explicit event
+	if d.Registry != nil && e.Code == "STATE_OFFLINE" {
+		_ = d.Registry.MarkOffline(
+			context.Background(),
+			env.DeviceID,
+			env.Ts,
+			"event",
+		)
+	}
 
 	if d.Influx == nil {
 		return
