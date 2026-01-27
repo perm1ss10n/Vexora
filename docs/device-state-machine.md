@@ -221,6 +221,8 @@
 - `OTA_OK`
 - `OTA_FAIL`
 
+## 5) Диаграмма
+```
 ```mermaid
 stateDiagram-v2
     [*] --> BOOT
@@ -259,3 +261,4 @@ stateDiagram-v2
 
     ERROR --> BOOT: reboot/watchdog
     ERROR --> PROVISIONING: recovery mode
+```
