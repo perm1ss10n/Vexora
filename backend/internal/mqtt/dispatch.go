@@ -9,6 +9,10 @@ import (
 	"sync"
 	"time"
 
+	"context"
+
+	"github.com/perm1ss10n/vexora/backend/internal/registry"
+
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 
 	"github.com/perm1ss10n/vexora/backend/internal/influx"
@@ -16,7 +20,8 @@ import (
 )
 
 type Dispatcher struct {
-	Influx *influx.Client
+	Influx   *influx.Client
+	Registry registry.Store
 
 	mu         sync.Mutex
 	lastWrite  map[string]int64 // key = deviceId|metric -> unixMillis
@@ -44,6 +49,11 @@ func (d *Dispatcher) InitRateLimitFromEnv() {
 }
 
 func (d *Dispatcher) Dispatch(topic string, payload []byte, env model.Envelope) {
+	// 2.3.1: любое сообщение = “устройство живое/на связи”
+	if d.Registry != nil && env.DeviceID != "" {
+		_ = d.Registry.Touch(context.Background(), env.DeviceID, env.Ts, topic)
+	}
+
 	switch {
 	case strings.HasSuffix(topic, "/telemetry"):
 		d.handleTelemetry(topic, payload, env)
@@ -208,7 +218,7 @@ func (d *Dispatcher) handleEvent(topic string, payload []byte, env model.Envelop
 	if e.Msg != "" {
 		fields["msg"] = e.Msg
 	}
-	if e.Data != nil && len(e.Data) > 0 {
+	if len(e.Data) > 0 {
 		if b, err := json.Marshal(e.Data); err == nil {
 			fields["data"] = string(b)
 		}
