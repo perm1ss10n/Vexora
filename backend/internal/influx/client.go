@@ -1,9 +1,9 @@
 package influx
 
 import (
-	"context"
+	"log"
 	"os"
-	"time"
+	"strconv"
 
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	"github.com/influxdata/influxdb-client-go/v2/api"
@@ -12,7 +12,8 @@ import (
 
 type Client struct {
 	cli      influxdb2.Client
-	writeAPI api.WriteAPIBlocking
+	writeAPI api.WriteAPI
+	done     chan struct{}
 }
 
 type Config struct {
@@ -32,23 +33,55 @@ func LoadConfigFromEnv() Config {
 }
 
 func New(cfg Config) *Client {
-	cli := influxdb2.NewClient(cfg.URL, cfg.Token)
-	return &Client{
+	opts := influxdb2.DefaultOptions().
+		SetBatchSize(getenvUint("INFLUX_BATCH_SIZE", 500)).
+		SetFlushInterval(getenvUint("INFLUX_FLUSH_MS", 1000)).
+		//Отсутствует в нашей версии похоже, для MVP пока нахуй не упёрлась
+		// SetRetryJitter(getenvInt("INFLUX_JITTER_MS", 250)).
+		SetRetryInterval(getenvUint("INFLUX_RETRY_MS", 1000)).
+		SetMaxRetries(getenvUint("INFLUX_MAX_RETRIES", 3)).
+		SetMaxRetryTime(getenvUint("INFLUX_MAX_RETRY_TIME_MS", 30000)).
+		SetHTTPRequestTimeout(getenvUint("INFLUX_HTTP_TIMEOUT_MS", 5000)).
+		SetHTTPRequestTimeout(getenvUint("INFLUX_HTTP_TIMEOUT_MS", 5000))
+
+	cli := influxdb2.NewClientWithOptions(cfg.URL, cfg.Token, opts)
+	w := cli.WriteAPI(cfg.Org, cfg.Bucket)
+
+	c := &Client{
 		cli:      cli,
-		writeAPI: cli.WriteAPIBlocking(cfg.Org, cfg.Bucket),
+		writeAPI: w,
+		done:     make(chan struct{}),
 	}
+
+	// Логируем async ошибки записи
+	go func() {
+		for {
+			select {
+			case err, ok := <-w.Errors():
+				if !ok {
+					return
+				}
+				log.Printf("[INFLUX] async_write_error: %v", err)
+			case <-c.done:
+				return
+			}
+		}
+	}()
+
+	return c
 }
 
 func (c *Client) Close() {
-	if c != nil && c.cli != nil {
-		c.cli.Close()
+	if c == nil || c.cli == nil {
+		return
 	}
+	close(c.done)
+	c.writeAPI.Flush()
+	c.cli.Close()
 }
 
-func (c *Client) WritePoint(p *write.Point) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return c.writeAPI.WritePoint(ctx, p)
+func (c *Client) WritePoint(p *write.Point) {
+	c.writeAPI.WritePoint(p)
 }
 
 func getenv(k, def string) string {
@@ -57,4 +90,28 @@ func getenv(k, def string) string {
 		return def
 	}
 	return v
+}
+
+func getenvInt(k string, def int) int {
+	v := os.Getenv(k)
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	return n
+}
+
+func getenvUint(k string, def uint) uint {
+	v := os.Getenv(k)
+	if v == "" {
+		return def
+	}
+	n, err := strconv.ParseUint(v, 10, 64)
+	if err != nil {
+		return def
+	}
+	return uint(n)
 }

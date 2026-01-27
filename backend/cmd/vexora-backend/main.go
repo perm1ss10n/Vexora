@@ -20,6 +20,7 @@ func main() {
 	}
 
 	d := &mqtt.Dispatcher{Influx: influxClient}
+	d.InitRateLimitFromEnv()
 	handler := mqtt.MakeMessageHandler(d)
 
 	cfg := mqtt.LoadConfigFromEnv()
