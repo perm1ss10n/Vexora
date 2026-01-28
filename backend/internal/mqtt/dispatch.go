@@ -12,6 +12,7 @@ import (
 
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 
+	"github.com/perm1ss10n/vexora/backend/internal/commands"
 	"github.com/perm1ss10n/vexora/backend/internal/influx"
 	"github.com/perm1ss10n/vexora/backend/internal/model"
 	"github.com/perm1ss10n/vexora/backend/internal/registry"
@@ -20,6 +21,7 @@ import (
 type Dispatcher struct {
 	Influx   *influx.Client
 	Registry registry.Store
+	Commands *commands.Manager
 
 	mu         sync.Mutex
 	lastWrite  map[string]int64 // key = deviceId|metric -> unixMillis
@@ -45,6 +47,23 @@ func (d *Dispatcher) InitRateLimitFromEnv() {
 	}
 	d.minWriteMs = n
 }
+func (d *Dispatcher) handleAck(topic string, payload []byte, env model.Envelope) {
+	var a model.AckPayload
+	if err := json.Unmarshal(payload, &a); err != nil {
+		log.Printf("[ACK] invalid_json topic=%s err=%v", topic, err)
+		return
+	}
+
+	// лог
+	log.Printf("[ACK] recv topic=%s deviceId=%s id=%s ok=%v code=%s ts=%d size=%d",
+		topic, env.DeviceID, a.ID, a.Ok, a.Code, env.Ts, len(payload),
+	)
+
+	// пробуждаем ожидающую команду
+	if d.Commands != nil {
+		d.Commands.OnAck(a)
+	}
+}
 
 func (d *Dispatcher) Dispatch(topic string, payload []byte, env model.Envelope) {
 	// 2.3.1: любое сообщение = “устройство живое/на связи”
@@ -60,9 +79,11 @@ func (d *Dispatcher) Dispatch(topic string, payload []byte, env model.Envelope) 
 	case strings.HasSuffix(topic, "/state"):
 		d.handleState(topic, payload, env)
 	case strings.HasSuffix(topic, "/ack"):
-		log.Printf("[ACK] topic=%s deviceId=%s ts=%d size=%d", topic, env.DeviceID, env.Ts, len(payload))
+		d.handleAck(topic, payload, env)
 	case strings.HasSuffix(topic, "/cfg/status"):
 		log.Printf("[CFG_STATUS] topic=%s deviceId=%s ts=%d size=%d", topic, env.DeviceID, env.Ts, len(payload))
+	case strings.HasSuffix(topic, "/lwt"):
+		d.handleLWT(topic, payload, env)
 	default:
 		log.Printf("[MQTT] topic=%s deviceId=%s ts=%d size=%d", topic, env.DeviceID, env.Ts, len(payload))
 	}
@@ -255,4 +276,34 @@ func (d *Dispatcher) handleEvent(topic string, payload []byte, env model.Envelop
 
 	p := influxdb2.NewPoint("event", tags, fields, ts)
 	d.Influx.WritePoint(p)
+}
+func (d *Dispatcher) handleLWT(topic string, payload []byte, env model.Envelope) {
+	log.Printf("[LWT] recv topic=%s deviceId=%s ts=%d size=%d", topic, env.DeviceID, env.Ts, len(payload))
+
+	if d.Registry != nil && env.DeviceID != "" {
+		_ = d.Registry.MarkOffline(context.Background(), env.DeviceID, env.Ts, "lwt")
+	}
+
+	if d.Influx == nil {
+		return
+	}
+	ts := time.UnixMilli(env.Ts)
+
+	// event
+	p1 := influxdb2.NewPoint(
+		"event",
+		map[string]string{"deviceId": env.DeviceID, "code": "LWT_OFFLINE", "severity": "warn"},
+		map[string]interface{}{"msg": "device disconnected (LWT)"},
+		ts,
+	)
+	d.Influx.WritePoint(p1)
+
+	// state (опционально — чтобы можно было графить)
+	p2 := influxdb2.NewPoint(
+		"state",
+		map[string]string{"deviceId": env.DeviceID, "status": "offline"},
+		map[string]interface{}{"seen": 1},
+		ts,
+	)
+	d.Influx.WritePoint(p2)
 }

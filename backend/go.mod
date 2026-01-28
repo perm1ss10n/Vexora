@@ -6,12 +6,12 @@ require (
 	github.com/eclipse/paho.mqtt.golang v1.5.0
 	github.com/influxdata/influxdb-client-go/v2 v2.14.0
 	modernc.org/sqlite v1.29.2
+	github.com/google/uuid v1.3.1
 )
 
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/google/uuid v1.3.1 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/influxdata/line-protocol v0.0.0-20200327222509-2487e7298839 // indirect
