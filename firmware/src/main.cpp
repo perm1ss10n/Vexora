@@ -12,6 +12,7 @@
 #include "link/link_manager.h"
 #include "link/wifi_link.h"
 #include "link/gsm_link.h"
+#include "offline/offline_queue.h"
 
 // dev-<12hex>
 static void buildDeviceId(char *out, size_t outSize)
@@ -62,6 +63,7 @@ void setup()
     static char deviceId[24];
     buildDeviceId(deviceId, sizeof(deviceId));
     LOGI("BOOT", deviceId);
+    OfflineQueue::init(20);
 
     // Пробрасываем deviceId в MQTT
     cfg.mqtt.deviceId = deviceId;
@@ -105,6 +107,7 @@ void loop()
     linkManager.loop();
 
     MqttClient::loop();
+    OfflineQueue::flush();
     StatePublisher::loop();
     Telemetry::loop();
     App::loop();
