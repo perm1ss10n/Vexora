@@ -70,6 +70,16 @@ void Telemetry::loop()
         g_nextPublishMs = now + g_cfg.intervalMs;
         return;
     }
+    // ensure topic is built (in case deviceId appeared later)
+    if (g_topic[0] == '\0')
+    {
+        (void)buildTopicOnce(g_deviceId);
+        if (g_topic[0] == '\0')
+        { // всё ещё не собрался
+            g_nextPublishMs = now + g_cfg.intervalMs;
+            return;
+        }
+    }
 
     publishTick();
     g_nextPublishMs = now + g_cfg.intervalMs;

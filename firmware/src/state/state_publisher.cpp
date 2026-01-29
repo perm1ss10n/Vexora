@@ -6,6 +6,10 @@
 #include "mqtt/mqtt_client.h"
 #include "mqtt/mqtt_topics.h"
 
+#include <ctime>
+#include <cstdio>
+#include <cstring>
+
 static StatePublishConfig g_cfg;
 static const char *g_deviceId = nullptr;
 static const char *g_fw = nullptr;
@@ -17,6 +21,14 @@ static int g_rssi = 0;
 
 static uint32_t g_nextPublishMs = 0;
 static bool g_dirty = true;
+
+static uint64_t nowMs()
+{
+    time_t t = time(nullptr);
+    if (t < 1672531200)
+        return (uint64_t)millis();
+    return (uint64_t)t * 1000ULL;
+}
 
 static bool buildTopic(char *out, size_t outSize, const char *deviceId)
 {
@@ -39,6 +51,9 @@ void StatePublisher::setStatus(const char *status)
 {
     if (!status || status[0] == '\0')
         return;
+    if (strncmp(g_status, status, sizeof(g_status)) == 0)
+        return;
+
     strncpy(g_status, status, sizeof(g_status) - 1);
     g_status[sizeof(g_status) - 1] = '\0';
     g_dirty = true;
@@ -48,6 +63,9 @@ void StatePublisher::setLink(const char *linkType)
 {
     if (!linkType)
         linkType = "";
+    if (strncmp(g_link, linkType, sizeof(g_link)) == 0)
+        return;
+
     strncpy(g_link, linkType, sizeof(g_link) - 1);
     g_link[sizeof(g_link) - 1] = '\0';
     g_dirty = true;
@@ -57,6 +75,9 @@ void StatePublisher::setIP(const char *ip)
 {
     if (!ip)
         ip = "";
+    if (strncmp(g_ip, ip, sizeof(g_ip)) == 0)
+        return;
+
     strncpy(g_ip, ip, sizeof(g_ip) - 1);
     g_ip[sizeof(g_ip) - 1] = '\0';
     g_dirty = true;
@@ -64,6 +85,8 @@ void StatePublisher::setIP(const char *ip)
 
 void StatePublisher::setRssi(int rssi)
 {
+    if (g_rssi == rssi)
+        return;
     g_rssi = rssi;
     g_dirty = true;
 }
@@ -82,19 +105,14 @@ void StatePublisher::loop()
     if (g_nextPublishMs != 0 && now < g_nextPublishMs)
         return;
 
-    // состояние публикуем только при наличии MQTT
     if (!MqttClient::isConnected())
     {
-        // но статус можно обновить локально
-        setStatus("offline");
         g_nextPublishMs = now + g_cfg.intervalMs;
         return;
     }
 
-    // когда MQTT поднят — online
-    setStatus("online");
-
-    publishNow(false);
+    // Периодический publish: даже если ничего не менялось (retained refresh)
+    publishNow(true);
     g_nextPublishMs = now + g_cfg.intervalMs;
 }
 
@@ -113,7 +131,7 @@ void StatePublisher::publishNow(bool force)
     // {"v":1,"deviceId":"...","ts":...,"status":"online","link":{"type":"wifi","rssi":-55,"ip":"..."},"fw":"...","uptimeSec":123}
     char payload[384];
 
-    const uint64_t ts = (uint64_t)time(nullptr) * 1000ULL;
+    const uint64_t ts = nowMs();
     const uint32_t uptimeSec = millis() / 1000U;
 
     // link object (минимально)
@@ -125,7 +143,7 @@ void StatePublisher::publishNow(bool force)
                  g_deviceId,
                  (unsigned long long)ts,
                  g_status,
-                 (g_link[0] ? g_link : "wifi"),
+                 (g_link[0] ? g_link : "unknown"),
                  g_rssi,
                  g_ip,
                  (g_fw ? g_fw : ""),
@@ -138,7 +156,7 @@ void StatePublisher::publishNow(bool force)
                  g_deviceId,
                  (unsigned long long)ts,
                  g_status,
-                 (g_link[0] ? g_link : "wifi"),
+                 (g_link[0] ? g_link : "unknown"),
                  g_rssi,
                  (g_fw ? g_fw : ""),
                  (unsigned)uptimeSec);
