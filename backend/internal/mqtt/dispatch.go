@@ -280,28 +280,57 @@ func (d *Dispatcher) handleEvent(topic string, payload []byte, env model.Envelop
 func (d *Dispatcher) handleLWT(topic string, payload []byte, env model.Envelope) {
 	log.Printf("[LWT] recv topic=%s deviceId=%s ts=%d size=%d", topic, env.DeviceID, env.Ts, len(payload))
 
+	// Payload may be JSON like {"status":"online"|"offline"}. For real MQTT LWT we expect offline,
+	// but during manual tests we might publish online. Respect payload to avoid flipping status incorrectly.
+	status := "offline"
+	var lp struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(payload, &lp); err == nil {
+		s := strings.ToLower(strings.TrimSpace(lp.Status))
+		if s == "online" {
+			status = "online"
+		} else if s == "offline" {
+			status = "offline"
+		}
+	}
+
 	if d.Registry != nil && env.DeviceID != "" {
-		_ = d.Registry.MarkOffline(context.Background(), env.DeviceID, env.Ts, "lwt")
+		if status == "online" {
+			_ = d.Registry.UpdateState(context.Background(), env.DeviceID, "online", nil, nil, env.Ts)
+		} else {
+			_ = d.Registry.MarkOffline(context.Background(), env.DeviceID, env.Ts, "lwt")
+		}
 	}
 
 	if d.Influx == nil {
 		return
 	}
+
 	ts := time.UnixMilli(env.Ts)
 
 	// event
+	code := "LWT_OFFLINE"
+	sev := "warn"
+	msg := "device disconnected (LWT)"
+	if status == "online" {
+		code = "LWT_ONLINE"
+		sev = "info"
+		msg = "device connected (LWT online)"
+	}
+
 	p1 := influxdb2.NewPoint(
 		"event",
-		map[string]string{"deviceId": env.DeviceID, "code": "LWT_OFFLINE", "severity": "warn"},
-		map[string]interface{}{"msg": "device disconnected (LWT)"},
+		map[string]string{"deviceId": env.DeviceID, "code": code, "severity": sev},
+		map[string]interface{}{"msg": msg},
 		ts,
 	)
 	d.Influx.WritePoint(p1)
 
-	// state (опционально — чтобы можно было графить)
+	// state (optional — to graph state)
 	p2 := influxdb2.NewPoint(
 		"state",
-		map[string]string{"deviceId": env.DeviceID, "status": "offline"},
+		map[string]string{"deviceId": env.DeviceID, "status": status},
 		map[string]interface{}{"seen": 1},
 		ts,
 	)
