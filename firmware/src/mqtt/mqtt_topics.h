@@ -1,33 +1,42 @@
 #pragma once
-
-#include <Arduino.h>
+#include <stddef.h>
 #include <stdint.h>
-#include <stdio.h>
+#include <stdio.h>   // snprintf
 
-// Root: v1/dev/<deviceId>/...
-static constexpr const char* VX_TOPIC_ROOT = "v1/dev/";
+enum VxTopicKind : uint8_t {
+    VX_T_TELEMETRY,
+    VX_T_EVENT,
+    VX_T_STATE,
+    VX_T_ACK,
+    VX_T_CFG_STATUS,
+    VX_T_LWT,
+    VX_T_CMD,
+    VX_T_CFG,
+    VX_T_OTA
+};
 
-// Suffixes (must match backend topics.go)
-static constexpr const char* VX_T_TELEMETRY   = "/telemetry";
-static constexpr const char* VX_T_EVENT       = "/event";
-static constexpr const char* VX_T_STATE       = "/state";
-static constexpr const char* VX_T_ACK         = "/ack";
-static constexpr const char* VX_T_CFG_STATUS  = "/cfg/status";
-static constexpr const char* VX_T_LWT         = "/lwt";
+inline const char* vx_topic_suffix(VxTopicKind k) {
+    switch (k) {
+        case VX_T_TELEMETRY:  return "telemetry";
+        case VX_T_EVENT:      return "event";
+        case VX_T_STATE:      return "state";
+        case VX_T_ACK:        return "ack";
+        case VX_T_CFG_STATUS: return "cfg/status";
+        case VX_T_LWT:        return "lwt";
+        case VX_T_CMD:        return "cmd";
+        case VX_T_CFG:        return "cfg";
+        case VX_T_OTA:        return "ota";
+        default:              return "";
+    }
+}
 
-// Device <- Cloud (commands/config/OTA)
-// NOTE: backend topics.go currently doesn't list these yet, but firmware needs them for subscribe.
-static constexpr const char* VX_T_CMD          = "/cmd";
-static constexpr const char* VX_T_CFG          = "/cfg";
-static constexpr const char* VX_T_OTA          = "/ota";
+// v1/dev/<deviceId>/<suffix>
+inline bool vx_build_topic(char* out, size_t outSize, const char* deviceId, VxTopicKind kind) {
+    if (!out || outSize == 0 || !deviceId || deviceId[0] == '\0') return false;
 
-// Build "v1/dev/<deviceId><suffix>" into out.
-// Returns true if ok and fits.
-inline bool vx_build_topic(char* out, size_t outSize, const char* deviceId, const char* suffix) {
-    if (!out || outSize == 0) return false;
-    if (!deviceId || deviceId[0] == '\0') return false;
-    if (!suffix || suffix[0] == '\0') return false;
+    const char* suf = vx_topic_suffix(kind);
+    if (!suf || suf[0] == '\0') return false;
 
-    int n = snprintf(out, outSize, "%s%s%s", VX_TOPIC_ROOT, deviceId, suffix);
-    return (n > 0) && ((size_t)n < outSize);
+    int n = snprintf(out, outSize, "v1/dev/%s/%s", deviceId, suf);
+    return n > 0 && (size_t)n < outSize;
 }

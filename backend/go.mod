@@ -4,9 +4,9 @@ go 1.22
 
 require (
 	github.com/eclipse/paho.mqtt.golang v1.5.0
+	github.com/google/uuid v1.3.1
 	github.com/influxdata/influxdb-client-go/v2 v2.14.0
 	modernc.org/sqlite v1.29.2
-	github.com/google/uuid v1.3.1
 )
 
 require (

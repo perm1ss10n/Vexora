@@ -1,9 +1,16 @@
 #pragma once
-#include <Arduino.h>
+
 #include "config/config_manager.h"
 
-class Telemetry {
+class Telemetry
+{
 public:
-    static void init(const TelemetryConfig& cfg);
+    static void init(const TelemetryConfig &cfg, const char *deviceId);
     static void loop();
+
+    // MVP: быстро отправить одну метрику (можно дергать из кода)
+    static bool publishMetric(const char *key, float value, const char *unit = nullptr);
+
+private:
+    static void publishTick();
 };
