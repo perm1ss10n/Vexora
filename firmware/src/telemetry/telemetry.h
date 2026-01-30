@@ -10,6 +10,7 @@ public:
 
     // MVP: быстро отправить одну метрику (можно дергать из кода)
     static bool publishMetric(const char *key, float value, const char *unit = nullptr);
+    static void updateInterval(uint32_t intervalMs);
 
 private:
     static void publishTick();

@@ -7,6 +7,7 @@
 #include "log/logger.h"
 #include "mqtt/mqtt_client.h"
 #include "mqtt/mqtt_topics.h"
+#include "offline/offline_queue.h"
 
 static TelemetryConfig g_cfg;
 static const char *g_deviceId = nullptr;
@@ -122,7 +123,14 @@ bool Telemetry::publishMetric(const char *key, float value, const char *unit)
                  (double)value);
     }
 
-    return MqttClient::publish(g_topic, payload, false);
+    if (MqttClient::isConnected())
+    {
+        return MqttClient::publish(g_topic, payload, false);
+    }
+
+    // offline → в очередь
+    OfflineQueue::push(g_topic, payload, false);
+    return true;
 }
 
 void Telemetry::publishTick()
@@ -150,5 +158,24 @@ void Telemetry::publishTick()
              (unsigned long long)ts,
              (double)(millis() / 1000.0));
 
-    (void)MqttClient::publish(g_topic, payload, false);
+    if (MqttClient::isConnected())
+    {
+        (void)MqttClient::publish(g_topic, payload, false);
+    }
+    else
+    {
+        OfflineQueue::push(g_topic, payload, false);
+    }
+}
+void Telemetry::updateInterval(uint32_t intervalMs)
+{
+    if (intervalMs == 0)
+        return;
+
+    g_cfg.intervalMs = intervalMs;
+
+    // пересчитываем следующий тик
+    g_nextPublishMs = millis() + g_cfg.intervalMs;
+
+    LOGI("TEL", "interval updated");
 }

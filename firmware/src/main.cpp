@@ -12,6 +12,8 @@
 #include "link/link_manager.h"
 #include "link/wifi_link.h"
 #include "link/gsm_link.h"
+#include "offline/offline_queue.h"
+#include "cmd/cmd_processor.h"
 
 // dev-<12hex>
 static void buildDeviceId(char *out, size_t outSize)
@@ -34,7 +36,10 @@ static WiFiClient wifiNetClient;
 
 static void onMqttMessage(const char *topic, const uint8_t *payload, size_t len)
 {
-    (void)payload;
+    // 3.4 — команды / cfg / ota будут заходить сюда
+    CommandProcessor::onMessage(topic, payload, len);
+
+    // отладочный лог (можно оставить)
     char buf[96];
     snprintf(buf, sizeof(buf), "recv topic=%s len=%u", topic ? topic : "(null)", (unsigned)len);
     LOGI("MQTT", buf);
@@ -61,7 +66,9 @@ void setup()
 
     static char deviceId[24];
     buildDeviceId(deviceId, sizeof(deviceId));
+    CommandProcessor::init(deviceId);
     LOGI("BOOT", deviceId);
+    OfflineQueue::init(20);
 
     // Пробрасываем deviceId в MQTT
     cfg.mqtt.deviceId = deviceId;
@@ -105,6 +112,7 @@ void loop()
     linkManager.loop();
 
     MqttClient::loop();
+    OfflineQueue::flush();
     StatePublisher::loop();
     Telemetry::loop();
     App::loop();
