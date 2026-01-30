@@ -167,3 +167,15 @@ void Telemetry::publishTick()
         OfflineQueue::push(g_topic, payload, false);
     }
 }
+void Telemetry::updateInterval(uint32_t intervalMs)
+{
+    if (intervalMs == 0)
+        return;
+
+    g_cfg.intervalMs = intervalMs;
+
+    // пересчитываем следующий тик
+    g_nextPublishMs = millis() + g_cfg.intervalMs;
+
+    LOGI("TEL", "interval updated");
+}
