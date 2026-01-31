@@ -7,10 +7,10 @@
 #include <ArduinoJson.h>
 
 #include "log/logger.h"
+#include "config/config_manager.h"
 #include "mqtt/mqtt_client.h"
 #include "mqtt/mqtt_topics.h"
 #include "state/state_publisher.h"
-#include "telemetry/telemetry.h"
 
 const char *CommandProcessor::g_deviceId = nullptr;
 
@@ -34,38 +34,6 @@ static bool topicIsCmdForThisDevice(const char *topic, const char *deviceId)
         return false;
 
     return strcmp(topic, expected) == 0;
-}
-
-struct ApplyCfgResult
-{
-    bool ok;
-    const char *code;
-    const char *msg;
-};
-
-// ===== cfg apply =====
-
-static ApplyCfgResult applyCfg(JsonObject cfg)
-{
-    JsonObject telemetry = cfg["telemetry"];
-    if (telemetry.isNull())
-    {
-        return {true, "OK", "no telemetry changes"};
-    }
-
-    if (!telemetry["intervalMs"].is<uint32_t>())
-    {
-        return {false, "BAD_CFG", "telemetry.intervalMs required"};
-    }
-
-    const uint32_t interval = telemetry["intervalMs"].as<uint32_t>();
-    if (interval < 1000 || interval > 3600000)
-    {
-        return {false, "CFG_REJECTED", "intervalMs out of range (1000..3600000)"};
-    }
-
-    Telemetry::updateInterval(interval);
-    return {true, "OK", "telemetry interval applied"};
 }
 
 static void publishCfgStatus(const char *deviceId, const char *status)
@@ -166,15 +134,17 @@ bool CommandProcessor::handleCmd(const uint8_t *payload, size_t len)
             return false;
         }
 
-        ApplyCfgResult r = applyCfg(cfg);
+        ApplyCfgResult r = ConfigManager::applyCandidate(cfg);
         if (!r.ok)
         {
-            sendAck(id, false, r.code, r.msg);
+            sendAck(id, false,
+                    r.code ? r.code : "CFG_REJECTED",
+                    r.msg ? r.msg : "validation failed");
             publishCfgStatus(g_deviceId, "rejected");
             return false;
         }
 
-        sendAck(id, true, "OK", r.msg);
+        sendAck(id, true, "OK", r.msg ? r.msg : "cfg applied");
         sendEvent("CFG_APPLIED", "");
         publishCfgStatus(g_deviceId, "applied");
         return true;
