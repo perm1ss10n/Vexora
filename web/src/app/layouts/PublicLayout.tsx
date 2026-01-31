@@ -45,7 +45,7 @@ export function PublicLayout() {
       </main>
       <footer className="border-t border-border/70 py-10">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-6 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
-          <span>© 2024 KONYX Control Panel</span>
+          <span>© {new Date().getFullYear()} KONYX</span>
           <span>Premium tech operations console.</span>
         </div>
       </footer>

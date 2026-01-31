@@ -8,6 +8,7 @@ import (
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 
+	"github.com/joho/godotenv"
 	"github.com/perm1ss10n/vexora/backend/internal/auth"
 	"github.com/perm1ss10n/vexora/backend/internal/commands"
 	"github.com/perm1ss10n/vexora/backend/internal/httpapi"
@@ -27,6 +28,7 @@ func (p pahoPublisher) Publish(topic string, qos byte, retained bool, payload []
 }
 
 func main() {
+	_ = godotenv.Load()
 	// Influx (опционально): если токена нет — просто логируем без записи
 	var influxClient *influx.Client
 	icfg := influx.LoadConfigFromEnv()
