@@ -26,7 +26,7 @@ export function HomePage() {
             Premium-tech control layer
           </span>
           <h1 className="text-4xl font-semibold leading-tight md:text-5xl">
-            KONYX Control Panel
+            KONYX
             <span className="block text-gradient">Operations for connected hardware</span>
           </h1>
           <p className="text-base text-muted-foreground md:text-lg">
