@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 222 30% 7%;
+  --foreground: 210 20% 96%;
+  --card: 222 28% 10%;
+  --card-foreground: 210 20% 96%;
+  --primary: 191 94% 55%;
+  --primary-foreground: 222 30% 7%;
+  --muted: 225 22% 14%;
+  --muted-foreground: 215 16% 75%;
+  --accent: 200 90% 50%;
+  --accent-foreground: 210 40% 98%;
+  --border: 222 20% 20%;
+  --radius: 12px;
+}
+
+* {
+  @apply border-border;
+}
+
+body {
+  @apply bg-background text-foreground font-sans antialiased;
+}
+
+.grid-surface {
+  background-image: theme('backgroundImage.grid');
+  background-size: 48px 48px;
+}
+
+.text-gradient {
+  background: linear-gradient(90deg, #22d3ee, #3b82f6);
+  -webkit-background-clip: text;
+  color: transparent;
+}
