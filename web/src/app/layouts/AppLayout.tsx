@@ -22,11 +22,11 @@ const navItems = [
 
 export function AppLayout() {
   const navigate = useNavigate();
-  const { logout, email } = useAuthStore();
+  const { logout, user } = useAuthStore();
 
   const handleLogout = () => {
     logout();
-    navigate('/auth/login');
+    navigate('/login');
   };
 
   return (
@@ -62,7 +62,7 @@ export function AppLayout() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center gap-2">
                   <UserCircle className="h-5 w-5" />
-                  <span className="hidden text-sm md:inline">{email ?? 'Operator'}</span>
+                  <span className="hidden text-sm md:inline">{user?.email ?? 'Operator'}</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">

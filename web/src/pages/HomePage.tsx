@@ -34,7 +34,7 @@ export function HomePage() {
           </p>
           <div className="flex flex-wrap gap-4">
             <Button asChild size="lg">
-              <Link to="/auth/register">Запросить доступ</Link>
+              <Link to="/register">Запросить доступ</Link>
             </Button>
             <Button asChild variant="outline" size="lg">
               <Link to="/spec">Смотреть спецификацию</Link>

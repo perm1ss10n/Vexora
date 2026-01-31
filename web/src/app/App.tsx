@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { PublicLayout } from './layouts/PublicLayout';
 import { AppLayout } from './layouts/AppLayout';
@@ -14,8 +15,15 @@ import { DeviceDetailPage } from '@/pages/DeviceDetailPage';
 import { TelemetryPage } from '@/pages/TelemetryPage';
 import { CommandsPage } from '@/pages/CommandsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { useAuthStore } from '@/store/auth';
 
 export default function App() {
+  const bootstrap = useAuthStore((state) => state.bootstrap);
+
+  useEffect(() => {
+    bootstrap();
+  }, [bootstrap]);
+
   return (
     <Routes>
       <Route element={<PublicLayout />}>
@@ -26,11 +34,8 @@ export default function App() {
         <Route path="/support" element={<SupportPage />} />
       </Route>
 
-      <Route path="/auth">
-        <Route index element={<Navigate to="/auth/login" replace />} />
-        <Route path="login" element={<LoginPage />} />
-        <Route path="register" element={<RegisterPage />} />
-      </Route>
+      <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
 
       <Route path="/app" element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>

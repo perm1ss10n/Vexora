@@ -31,10 +31,10 @@ export function PublicLayout() {
           </nav>
           <div className="flex items-center gap-3">
             <Button variant="ghost" asChild>
-              <NavLink to="/auth/login">Войти</NavLink>
+              <NavLink to="/login">Войти</NavLink>
             </Button>
             <Button asChild>
-              <NavLink to="/auth/register">Регистрация</NavLink>
+              <NavLink to="/register">Регистрация</NavLink>
             </Button>
           </div>
         </div>
