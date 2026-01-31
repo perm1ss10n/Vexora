@@ -66,13 +66,15 @@ void setup()
 
     static char deviceId[24];
     buildDeviceId(deviceId, sizeof(deviceId));
+    ConfigManager::setDeviceId(deviceId);
     CommandProcessor::init(deviceId);
     LOGI("BOOT", deviceId);
     OfflineQueue::init(20);
 
-    // Пробрасываем deviceId в MQTT
+/*     Уже не нужен
+// Пробрасываем deviceId в MQTT
     cfg.mqtt.deviceId = deviceId;
-    cfg.mqtt.clientId = deviceId;
+    cfg.mqtt.clientId = deviceId; */
 
     // Telemetry
     TelemetryConfig tcfg;
@@ -112,6 +114,8 @@ void loop()
     linkManager.loop();
 
     MqttClient::loop();
+    ConfigManager::loop();
+    
     OfflineQueue::flush();
     StatePublisher::loop();
     Telemetry::loop();
