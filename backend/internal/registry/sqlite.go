@@ -237,3 +237,43 @@ WHERE device_id = ?;
 	_ = reason // оставим под аудит/логи позже
 	return nil
 }
+
+type DeviceRecord struct {
+	DeviceID        string
+	Status          string
+	LastSeenMillis  int64
+	TelemetryMillis sql.NullInt64
+	FW              sql.NullString
+}
+
+func (s *SQLiteStore) ListDevices(ctx context.Context) ([]DeviceRecord, error) {
+	rows, err := s.db.QueryContext(
+		ctx,
+		`SELECT device_id, status, last_seen_ts, last_telemetry_ts, fw
+FROM devices
+ORDER BY last_seen_ts DESC;`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("registry list devices: %w", err)
+	}
+	defer rows.Close()
+
+	devices := []DeviceRecord{}
+	for rows.Next() {
+		var record DeviceRecord
+		if err := rows.Scan(
+			&record.DeviceID,
+			&record.Status,
+			&record.LastSeenMillis,
+			&record.TelemetryMillis,
+			&record.FW,
+		); err != nil {
+			return nil, fmt.Errorf("registry scan devices: %w", err)
+		}
+		devices = append(devices, record)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("registry list devices rows: %w", err)
+	}
+	return devices, nil
+}
