@@ -81,7 +81,7 @@ func main() {
 	if addr == "" {
 		addr = ":8080"
 	}
-	api := httpapi.New(cmdMgr, authStore, tokenService)
+	api := httpapi.New(cmdMgr, authStore, tokenService, reg)
 	go func() {
 		log.Printf("[HTTP] listening addr=%s", addr)
 		if err := http.ListenAndServe(addr, api.Handler()); err != nil {

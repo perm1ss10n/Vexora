@@ -4,8 +4,8 @@ export interface Device {
   deviceId: string;
   status: DeviceStatus;
   lastSeen: string;
-  lastTelemetryTs: string;
-  fwVersion: string;
+  lastTelemetryAt?: string | null;
+  fwVersion?: string | null;
 }
 
 export interface DeviceState {

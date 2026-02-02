@@ -22,10 +22,15 @@ export const mockDevices: Device[] = deviceIds.map((deviceId, index) => {
     deviceId,
     status: randomStatus(index),
     lastSeen: lastSeen.toISOString(),
-    lastTelemetryTs: lastTelemetry.toISOString(),
+    lastTelemetryAt: lastTelemetry.toISOString(),
     fwVersion: `v2.4.${index}`,
   };
 });
+
+export const fetchDevices = async (): Promise<Device[]> => {
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  return mockDevices;
+};
 
 export const metrics: Metric[] = [
   { key: 'temperature', unit: '°C', label: 'Temperature' },
@@ -33,11 +38,6 @@ export const metrics: Metric[] = [
   { key: 'humidity', unit: '%', label: 'Humidity' },
   { key: 'pressure', unit: 'kPa', label: 'Pressure' },
 ];
-
-export const fetchDevices = async (): Promise<Device[]> => {
-  await new Promise((resolve) => setTimeout(resolve, 250));
-  return mockDevices;
-};
 
 export const fetchDeviceState = async (deviceId: string): Promise<DeviceState> => {
   await new Promise((resolve) => setTimeout(resolve, 200));

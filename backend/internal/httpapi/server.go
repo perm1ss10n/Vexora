@@ -11,12 +11,14 @@ import (
 	"github.com/perm1ss10n/vexora/backend/internal/auth"
 	"github.com/perm1ss10n/vexora/backend/internal/commands"
 	"github.com/perm1ss10n/vexora/backend/internal/model"
+	"github.com/perm1ss10n/vexora/backend/internal/registry"
 )
 
 type Server struct {
 	cmd   *commands.Manager
 	auth  *auth.Store
 	token *auth.TokenService
+	reg   *registry.SQLiteStore
 }
 
 type SendCmdRequest struct {
@@ -29,8 +31,8 @@ type SendCmdResponse struct {
 	Ack model.AckPayload `json:"ack"`
 }
 
-func New(cmd *commands.Manager, authStore *auth.Store, tokenService *auth.TokenService) *Server {
-	return &Server{cmd: cmd, auth: authStore, token: tokenService}
+func New(cmd *commands.Manager, authStore *auth.Store, tokenService *auth.TokenService, registryStore *registry.SQLiteStore) *Server {
+	return &Server{cmd: cmd, auth: authStore, token: tokenService, reg: registryStore}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -44,11 +46,73 @@ func (s *Server) Handler() http.Handler {
 		mux.HandleFunc("/api/v1/auth/logout", authHandler.Logout)
 		mux.Handle("/api/v1/auth/me", auth.RequireAuth(s.token, http.HandlerFunc(authHandler.Me)))
 	}
+	if s.reg != nil && s.token != nil {
+		mux.Handle("/api/v1/devices", auth.RequireAuth(s.token, http.HandlerFunc(s.handleDevices)))
+	}
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 		_, _ = w.Write([]byte("ok"))
 	})
 	return withCORS(mux)
+}
+
+type DeviceResponse struct {
+	DeviceID        string  `json:"deviceId"`
+	Status          string  `json:"status"`
+	LastSeen        string  `json:"lastSeen"`
+	LastTelemetryAt *string `json:"lastTelemetryAt"`
+	FWVersion       *string `json:"fwVersion"`
+}
+
+type DevicesResponse struct {
+	Devices []DeviceResponse `json:"devices"`
+}
+
+func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	devices, err := s.reg.ListDevices(r.Context())
+	if err != nil {
+		log.Printf("[HTTP] list devices failed: %v", err)
+		http.Error(w, "failed to list devices", http.StatusInternalServerError)
+		return
+	}
+
+	response := DevicesResponse{Devices: make([]DeviceResponse, 0, len(devices))}
+	for _, device := range devices {
+		status := device.Status
+		if status == "" {
+			status = "offline"
+		}
+
+		lastSeen := time.UnixMilli(device.LastSeenMillis).UTC().Format(time.RFC3339)
+		var lastTelemetry *string
+		if device.TelemetryMillis.Valid {
+			value := time.UnixMilli(device.TelemetryMillis.Int64).UTC().Format(time.RFC3339)
+			lastTelemetry = &value
+		}
+
+		var fwVersion *string
+		if device.FW.Valid {
+			value := device.FW.String
+			if value != "" {
+				fwVersion = &value
+			}
+		}
+
+		response.Devices = append(response.Devices, DeviceResponse{
+			DeviceID:        device.DeviceID,
+			Status:          status,
+			LastSeen:        lastSeen,
+			LastTelemetryAt: lastTelemetry,
+			FWVersion:       fwVersion,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, response)
 }
 
 func (s *Server) handleDev(w http.ResponseWriter, r *http.Request) {
