@@ -8,6 +8,8 @@ import (
 
 	paho "github.com/eclipse/paho.mqtt.golang"
 
+	"github.com/joho/godotenv"
+	"github.com/perm1ss10n/vexora/backend/internal/auth"
 	"github.com/perm1ss10n/vexora/backend/internal/commands"
 	"github.com/perm1ss10n/vexora/backend/internal/httpapi"
 	"github.com/perm1ss10n/vexora/backend/internal/influx"
@@ -26,6 +28,7 @@ func (p pahoPublisher) Publish(topic string, qos byte, retained bool, payload []
 }
 
 func main() {
+	_ = godotenv.Load()
 	// Influx (опционально): если токена нет — просто логируем без записи
 	var influxClient *influx.Client
 	icfg := influx.LoadConfigFromEnv()
@@ -45,6 +48,12 @@ func main() {
 	}
 	defer reg.Close()
 	log.Printf("[REGISTRY] enabled db=%s", rcfg.Path)
+
+	tokenService, err := auth.NewTokenServiceFromEnv()
+	if err != nil {
+		log.Fatalf("auth token init failed: %v", err)
+	}
+	authStore := auth.NewStore(reg.DB())
 
 	d := &mqtt.Dispatcher{
 		Influx:   influxClient,
@@ -72,7 +81,7 @@ func main() {
 	if addr == "" {
 		addr = ":8080"
 	}
-	api := httpapi.New(cmdMgr)
+	api := httpapi.New(cmdMgr, authStore, tokenService)
 	go func() {
 		log.Printf("[HTTP] listening addr=%s", addr)
 		if err := http.ListenAndServe(addr, api.Handler()); err != nil {
