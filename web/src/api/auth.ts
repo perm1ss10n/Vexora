@@ -19,20 +19,20 @@ interface MeResponse {
 }
 
 export const register = (email: string, password: string) =>
-  apiRequest<AuthResponse>('/v1/auth/register', {
+  apiRequest<AuthResponse>('/api/v1/auth/register', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   });
 
 export const login = (email: string, password: string) =>
-  apiRequest<AuthResponse>('/v1/auth/login', {
+  apiRequest<AuthResponse>('/api/v1/auth/login', {
     method: 'POST',
     body: JSON.stringify({ email, password }),
   });
 
-export const refresh = () => apiRequest<RefreshResponse>('/v1/auth/refresh', { method: 'POST' });
+export const refresh = () => apiRequest<RefreshResponse>('/api/v1/auth/refresh', { method: 'POST' });
 
-export const logout = () => apiRequest<void>('/v1/auth/logout', { method: 'POST' });
+export const logout = () => apiRequest<void>('/api/v1/auth/logout', { method: 'POST' });
 
 export const me = async (
   accessToken: string,
@@ -40,7 +40,7 @@ export const me = async (
   onUnauthorized?: () => Promise<void>
 ) => {
   const { data, accessToken: nextToken } = await apiRequestWithAuth<MeResponse>(
-    '/v1/auth/me',
+    '/api/v1/auth/me',
     accessToken,
     { method: 'GET' },
     refreshToken,

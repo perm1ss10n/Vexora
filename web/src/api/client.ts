@@ -7,8 +7,7 @@ export class ApiError extends Error {
   }
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080';
-
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
 type RequestOptions = Omit<RequestInit, 'headers'> & { headers?: Record<string, string> };
 
 export const apiRequest = async <T>(path: string, options: RequestOptions = {}): Promise<T> => {
@@ -73,13 +72,19 @@ export const apiRequestWithAuth = async <T>(
 };
 
 const readErrorMessage = async (response: Response): Promise<string> => {
+  const ct = response.headers.get("content-type") || "";
   try {
-    const data = await response.json();
-    if (typeof data?.message === 'string') {
-      return data.message;
+    // JSON error body (если когда-нибудь бек начнет отдавать {message:"..."})
+    if (ct.includes("application/json")) {
+      const data = await response.json();
+      if (typeof (data as any)?.message === "string") return (data as any).message;
+      return JSON.stringify(data);
     }
+
+    // plain text (http.Error по умолчанию отдаёт text/plain)
+    const text = await response.text();
+    return text || response.statusText || "Request failed";
   } catch {
-    // ignore
+    return response.statusText || "Request failed";
   }
-  return response.statusText || 'Request failed';
 };

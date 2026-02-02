@@ -38,13 +38,13 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v1/dev/", s.handleDev)
 	if s.auth != nil && s.token != nil {
 		authHandler := auth.NewHandler(s.auth, s.token)
-		mux.HandleFunc("/v1/auth/register", authHandler.Register)
-		mux.HandleFunc("/v1/auth/login", authHandler.Login)
-		mux.HandleFunc("/v1/auth/refresh", authHandler.Refresh)
-		mux.HandleFunc("/v1/auth/logout", authHandler.Logout)
-		mux.Handle("/v1/auth/me", auth.RequireAuth(s.token, http.HandlerFunc(authHandler.Me)))
+		mux.HandleFunc("/api/v1/auth/register", authHandler.Register)
+		mux.HandleFunc("/api/v1/auth/login", authHandler.Login)
+		mux.HandleFunc("/api/v1/auth/refresh", authHandler.Refresh)
+		mux.HandleFunc("/api/v1/auth/logout", authHandler.Logout)
+		mux.Handle("/api/v1/auth/me", auth.RequireAuth(s.token, http.HandlerFunc(authHandler.Me)))
 	}
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 		_, _ = w.Write([]byte("ok"))
 	})
