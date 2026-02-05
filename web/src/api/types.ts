@@ -37,18 +37,15 @@ export interface Metric {
   label: string;
 }
 
-export interface CommandRequest {
-  id: string;
-  deviceId: string;
-  type: 'ping' | 'reboot' | 'get_state' | 'apply_cfg';
-  payload?: Record<string, string | number>;
-  createdAt: string;
-}
+export type CommandType = 'ping' | 'reboot' | 'get_state' | 'apply_cfg';
 
-export interface CommandResult {
+export interface CommandAck {
+  v: number;
   id: string;
   deviceId: string;
-  type: CommandRequest['type'];
-  status: 'sent' | 'acked' | 'error';
-  createdAt: string;
+  ts: number;
+  ok: boolean;
+  code?: string;
+  msg?: string;
+  data?: Record<string, unknown>;
 }

@@ -1,4 +1,4 @@
-import { CommandRequest, CommandResult, Device, DeviceRuntimeState, Metric, TelemetryPoint } from './types';
+import { Device, DeviceRuntimeState, Metric, TelemetryPoint } from './types';
 
 const deviceIds = [
   'KNY-AX91-001',
@@ -68,15 +68,4 @@ export const fetchLastTelemetry = async (deviceId: string) => {
     value: Number((Math.random() * 40 + 20).toFixed(1)),
     ts: new Date(base - index * 1000 * 60 * 2).toISOString(),
   }));
-};
-
-export const sendCommand = async (request: CommandRequest): Promise<CommandResult> => {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  return {
-    id: request.id,
-    deviceId: request.deviceId,
-    type: request.type,
-    status: 'sent',
-    createdAt: request.createdAt,
-  };
 };

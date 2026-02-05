@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -40,7 +41,6 @@ func New(cmd *commands.Manager, authStore *auth.Store, tokenService *auth.TokenS
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/v1/dev/", s.handleDev)
 	if s.auth != nil && s.token != nil {
 		authHandler := auth.NewHandler(s.auth, s.token)
 		mux.HandleFunc("/api/v1/auth/register", authHandler.Register)
@@ -52,6 +52,11 @@ func (s *Server) Handler() http.Handler {
 	if s.reg != nil && s.token != nil {
 		mux.Handle("/api/v1/devices", auth.RequireAuth(s.token, http.HandlerFunc(s.handleDevices)))
 		mux.Handle("/api/v1/devices/", auth.RequireAuth(s.token, http.HandlerFunc(s.handleDeviceDetail)))
+	}
+	if s.token != nil {
+		mux.Handle("/api/v1/dev/", auth.RequireAuth(s.token, http.HandlerFunc(s.handleDev)))
+	} else {
+		mux.HandleFunc("/api/v1/dev/", s.handleDev)
 	}
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
@@ -347,6 +352,18 @@ func (s *Server) handleDev(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad path", http.StatusBadRequest)
 		return
 	}
+	if s.reg != nil {
+		record, err := s.reg.GetDevice(r.Context(), deviceID)
+		if err != nil {
+			log.Printf("[HTTP] get device failed: %v", err)
+			http.Error(w, "failed to resolve device", http.StatusInternalServerError)
+			return
+		}
+		if record == nil {
+			http.Error(w, "device not found", http.StatusNotFound)
+			return
+		}
+	}
 
 	var req SendCmdRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -357,24 +374,33 @@ func (s *Server) handleDev(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "type is required", http.StatusBadRequest)
 		return
 	}
+	switch req.Type {
+	case "ping", "reboot", "get_state", "apply_cfg":
+	default:
+		http.Error(w, "unknown command type", http.StatusBadRequest)
+		return
+	}
 
 	timeout := 10 * time.Second
 	if req.TimeoutMs > 0 {
 		timeout = time.Duration(req.TimeoutMs) * time.Millisecond
 	}
 
+	log.Printf("[HTTP] cmd_send deviceId=%s type=%s", deviceID, req.Type)
 	ack, err := s.cmd.Send(r.Context(), deviceID, req.Type, req.Params, timeout)
 	if err != nil {
 		// TIMEOUT — это не “500”, это ожидаемое поведение
-		if strings.Contains(err.Error(), "timeout") {
+		if errors.Is(err, commands.ErrTimeout) {
+			log.Printf("[HTTP] cmd_result deviceId=%s type=%s ok=%t code=%s err=%v", deviceID, req.Type, ack.Ok, ack.Code, err)
 			writeJSON(w, http.StatusGatewayTimeout, SendCmdResponse{Ack: ack})
 			return
 		}
-		log.Printf("[HTTP] cmd_send_failed deviceId=%s type=%s err=%v", deviceID, req.Type, err)
+		log.Printf("[HTTP] cmd_result deviceId=%s type=%s ok=%t code=%s err=%v", deviceID, req.Type, ack.Ok, ack.Code, err)
 		writeJSON(w, http.StatusInternalServerError, SendCmdResponse{Ack: ack})
 		return
 	}
 
+	log.Printf("[HTTP] cmd_result deviceId=%s type=%s ok=%t code=%s", deviceID, req.Type, ack.Ok, ack.Code)
 	writeJSON(w, http.StatusOK, SendCmdResponse{Ack: ack})
 }
 
