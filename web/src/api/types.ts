@@ -18,6 +18,18 @@ export interface DeviceTelemetrySnapshot {
   metrics: Record<string, number>;
 }
 
+export type CfgStatus = 'unknown' | 'pending' | 'applied' | 'rejected' | 'rolled_back';
+
+export interface TelemetrySettings {
+  intervalMs: number;
+  minPublishMs: number;
+}
+
+export interface DeviceSettings {
+  telemetry: TelemetrySettings;
+  cfgStatus: CfgStatus;
+}
+
 export interface TelemetryPoint {
   ts: number;
   value: number;

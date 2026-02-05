@@ -1,5 +1,5 @@
 import { apiRequestWithAuth } from './client';
-import { Device, DeviceRuntimeState, DeviceTelemetrySnapshot } from './types';
+import { Device, DeviceRuntimeState, DeviceSettings, DeviceTelemetrySnapshot } from './types';
 
 export const getDevices = async (
   accessToken: string,
@@ -20,6 +20,8 @@ export interface DeviceDetailResponse {
   device: Device;
   state: DeviceRuntimeState | null;
   lastTelemetry: DeviceTelemetrySnapshot | null;
+  settings: DeviceSettings;
+  settingsSource?: string;
 }
 
 export const getDeviceDetail = async (
