@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils';
 
 const navItems = [
   { label: 'Devices', to: '/app/devices' },
-  { label: 'Telemetry', to: '/app/telemetry' },
+  { label: 'Telemetry', to: '/telemetry' },
   { label: 'Commands', to: '/app/commands' },
   { label: 'Settings', to: '/app/settings' },
 ];

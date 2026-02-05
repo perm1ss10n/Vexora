@@ -19,8 +19,16 @@ export interface DeviceTelemetrySnapshot {
 }
 
 export interface TelemetryPoint {
-  ts: string;
+  ts: number;
   value: number;
+}
+
+export interface TelemetrySeriesResponse {
+  deviceId: string;
+  metric: string;
+  from: number;
+  to: number;
+  points: TelemetryPoint[];
 }
 
 export interface Metric {

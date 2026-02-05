@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -77,6 +78,19 @@ type LastTelemetryResponse struct {
 	Metrics map[string]float64 `json:"metrics"`
 }
 
+type TelemetryPointResponse struct {
+	Ts    int64   `json:"ts"`
+	Value float64 `json:"value"`
+}
+
+type TelemetrySeriesResponse struct {
+	DeviceID string                   `json:"deviceId"`
+	Metric   string                   `json:"metric"`
+	From     int64                    `json:"from"`
+	To       int64                    `json:"to"`
+	Points   []TelemetryPointResponse `json:"points"`
+}
+
 type DeviceDetailResponse struct {
 	Device        DeviceResponse         `json:"device"`
 	State         *DeviceStateResponse   `json:"state"`
@@ -125,6 +139,11 @@ func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeviceDetail(w http.ResponseWriter, r *http.Request) {
+	if strings.HasSuffix(r.URL.Path, "/telemetry") {
+		s.handleDeviceTelemetry(w, r)
+		return
+	}
+
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -199,6 +218,113 @@ func (s *Server) handleDeviceDetail(w http.ResponseWriter, r *http.Request) {
 		},
 		State:         state,
 		LastTelemetry: lastTelemetry,
+	})
+}
+
+func (s *Server) handleDeviceTelemetry(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1/devices/")
+	parts := strings.Split(path, "/")
+	if len(parts) != 2 || parts[1] != "telemetry" {
+		http.Error(w, "bad path", http.StatusBadRequest)
+		return
+	}
+	deviceID := strings.TrimSpace(parts[0])
+	if deviceID == "" {
+		http.Error(w, "bad path", http.StatusBadRequest)
+		return
+	}
+
+	if s.reg == nil {
+		http.Error(w, "device registry unavailable", http.StatusInternalServerError)
+		return
+	}
+
+	device, err := s.reg.GetDevice(r.Context(), deviceID)
+	if err != nil {
+		log.Printf("[HTTP] get device failed: %v", err)
+		http.Error(w, "failed to get device", http.StatusInternalServerError)
+		return
+	}
+	if device == nil {
+		http.Error(w, "device not found", http.StatusNotFound)
+		return
+	}
+
+	if s.influx == nil {
+		http.Error(w, "influx disabled", http.StatusNotImplemented)
+		return
+	}
+
+	query := r.URL.Query()
+	metric := strings.TrimSpace(query.Get("metric"))
+	fromStr := strings.TrimSpace(query.Get("from"))
+	toStr := strings.TrimSpace(query.Get("to"))
+	if metric == "" || fromStr == "" || toStr == "" {
+		http.Error(w, "metric, from, and to are required", http.StatusBadRequest)
+		return
+	}
+
+	from, err := strconv.ParseInt(fromStr, 10, 64)
+	if err != nil || from <= 0 {
+		http.Error(w, "invalid from", http.StatusBadRequest)
+		return
+	}
+	to, err := strconv.ParseInt(toStr, 10, 64)
+	if err != nil || to <= 0 {
+		http.Error(w, "invalid to", http.StatusBadRequest)
+		return
+	}
+	if from >= to {
+		http.Error(w, "from must be less than to", http.StatusBadRequest)
+		return
+	}
+
+	limit := 1000
+	if limitStr := strings.TrimSpace(query.Get("limit")); limitStr != "" {
+		parsed, err := strconv.Atoi(limitStr)
+		if err != nil || parsed <= 0 {
+			http.Error(w, "invalid limit", http.StatusBadRequest)
+			return
+		}
+		limit = parsed
+	}
+	if limit > 5000 {
+		limit = 5000
+	}
+
+	points, err := s.influx.GetTelemetrySeries(
+		r.Context(),
+		deviceID,
+		metric,
+		time.Unix(from, 0),
+		time.Unix(to, 0),
+		limit,
+	)
+	if err != nil {
+		log.Printf("[HTTP] get telemetry series failed: %v", err)
+		http.Error(w, "failed to get telemetry series", http.StatusInternalServerError)
+		return
+	}
+
+	responsePoints := make([]TelemetryPointResponse, 0, len(points))
+	for _, point := range points {
+		responsePoints = append(responsePoints, TelemetryPointResponse{
+			Ts:    point.Ts,
+			Value: point.Value,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, TelemetrySeriesResponse{
+		DeviceID: deviceID,
+		Metric:   metric,
+		From:     from,
+		To:       to,
+		Points:   responsePoints,
 	})
 }
 
