@@ -44,7 +44,6 @@ export function DevicesPage() {
                   <TableHead>Device ID</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Last seen</TableHead>
-                  <TableHead>Last telemetry</TableHead>
                   <TableHead>FW version</TableHead>
                 </TableRow>
               </TableHeader>
@@ -62,12 +61,7 @@ export function DevicesPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {new Date(device.lastSeen).toLocaleString('ru-RU')}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {device.lastTelemetryAt
-                        ? new Date(device.lastTelemetryAt).toLocaleString('ru-RU')
-                        : '—'}
+                      {new Date(device.lastSeen * 1000).toLocaleString('ru-RU')}
                     </TableCell>
                     <TableCell>{device.fwVersion ?? '—'}</TableCell>
                   </TableRow>

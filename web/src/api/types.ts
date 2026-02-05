@@ -3,21 +3,19 @@ export type DeviceStatus = 'online' | 'offline';
 export interface Device {
   deviceId: string;
   status: DeviceStatus;
-  lastSeen: string;
-  lastTelemetryAt?: string | null;
+  lastSeen: number;
   fwVersion?: string | null;
 }
 
-export interface DeviceState {
-  status: DeviceStatus;
-  link: {
-    type: 'lte' | 'wifi' | 'ethernet';
-    rssi: number;
-    ip: string;
-  };
-  fw: string;
-  uptimeSec: number;
-  ts: string;
+export interface DeviceRuntimeState {
+  uptime: number;
+  link: string;
+  ip: string;
+}
+
+export interface DeviceTelemetrySnapshot {
+  ts: number;
+  metrics: Record<string, number>;
 }
 
 export interface TelemetryPoint {
