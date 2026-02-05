@@ -4,8 +4,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectViewport } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
+import { DeviceSelect } from '@/components/DeviceSelect';
 import { ApiError } from '@/api/client';
 import { sendCommand } from '@/api/commands';
 import { CommandAck, CommandType } from '@/api/types';
@@ -155,22 +155,7 @@ export function CommandsPage() {
       <Card>
         <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <CardTitle>Commands</CardTitle>
-          <div className="w-64">
-            <Select value={deviceId} onValueChange={setDeviceId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select device" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectViewport>
-                  {devices.map((device) => (
-                    <SelectItem key={device.deviceId} value={device.deviceId}>
-                      {device.deviceId}
-                    </SelectItem>
-                  ))}
-                </SelectViewport>
-              </SelectContent>
-            </Select>
-          </div>
+          <DeviceSelect value={deviceId} onChange={setDeviceId} className="w-64" />
         </CardHeader>
         <CardContent>
           {!deviceId && <p className="text-sm text-muted-foreground">Select a device to send commands.</p>}

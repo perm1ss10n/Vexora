@@ -83,6 +83,16 @@ type LastTelemetryResponse struct {
 	Metrics map[string]float64 `json:"metrics"`
 }
 
+type TelemetrySettingsResponse struct {
+	IntervalMs   int `json:"intervalMs"`
+	MinPublishMs int `json:"minPublishMs"`
+}
+
+type DeviceSettingsResponse struct {
+	Telemetry TelemetrySettingsResponse `json:"telemetry"`
+	CfgStatus string                    `json:"cfgStatus"`
+}
+
 type TelemetryPointResponse struct {
 	Ts    int64   `json:"ts"`
 	Value float64 `json:"value"`
@@ -97,9 +107,11 @@ type TelemetrySeriesResponse struct {
 }
 
 type DeviceDetailResponse struct {
-	Device        DeviceResponse         `json:"device"`
-	State         *DeviceStateResponse   `json:"state"`
-	LastTelemetry *LastTelemetryResponse `json:"lastTelemetry"`
+	Device         DeviceResponse         `json:"device"`
+	State          *DeviceStateResponse   `json:"state"`
+	LastTelemetry  *LastTelemetryResponse `json:"lastTelemetry"`
+	Settings       DeviceSettingsResponse `json:"settings"`
+	SettingsSource *string                `json:"settingsSource,omitempty"`
 }
 
 func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
@@ -214,6 +226,15 @@ func (s *Server) handleDeviceDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	settingsSource := "backend_default"
+	settings := DeviceSettingsResponse{
+		Telemetry: TelemetrySettingsResponse{
+			IntervalMs:   5000,
+			MinPublishMs: 0,
+		},
+		CfgStatus: "unknown",
+	}
+
 	writeJSON(w, http.StatusOK, DeviceDetailResponse{
 		Device: DeviceResponse{
 			DeviceID:  device.DeviceID,
@@ -221,8 +242,10 @@ func (s *Server) handleDeviceDetail(w http.ResponseWriter, r *http.Request) {
 			LastSeen:  lastSeen,
 			FWVersion: fwVersion,
 		},
-		State:         state,
-		LastTelemetry: lastTelemetry,
+		State:          state,
+		LastTelemetry:  lastTelemetry,
+		Settings:       settings,
+		SettingsSource: &settingsSource,
 	})
 }
 
