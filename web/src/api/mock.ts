@@ -53,7 +53,7 @@ export const fetchDeviceTelemetry = async (deviceId: string): Promise<TelemetryP
   return Array.from({ length: 60 }).map((_, index) => {
     const ts = new Date(base - (59 - index) * 60 * 1000);
     return {
-      ts: ts.toISOString(),
+      ts: Math.floor(ts.getTime() / 1000),
       value: 50 + Math.sin(index / 5) * 8 + (deviceId.length % 4) * 2 + Math.random() * 2,
     };
   });

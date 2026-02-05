@@ -18,6 +18,11 @@ type TelemetrySnapshot struct {
 	Metrics map[string]float64
 }
 
+type TelemetryPoint struct {
+	Ts    int64
+	Value float64
+}
+
 func (c *Client) GetLastState(ctx context.Context, deviceID string) (*StateSnapshot, error) {
 	if c == nil || c.cli == nil || deviceID == "" {
 		return nil, nil
@@ -139,6 +144,54 @@ func (c *Client) GetLastTelemetry(ctx context.Context, deviceID string) (*Teleme
 		snapshot.Ts = lastTime.Unix()
 	}
 	return snapshot, nil
+}
+
+func (c *Client) GetTelemetrySeries(ctx context.Context, deviceID, metric string, from, to time.Time, limit int) ([]TelemetryPoint, error) {
+	if c == nil || c.cli == nil || deviceID == "" || metric == "" {
+		return nil, nil
+	}
+
+	start := from.UTC().Format(time.RFC3339)
+	stop := to.UTC().Format(time.RFC3339)
+
+	query := fmt.Sprintf(
+		`from(bucket: "%s")
+  |> range(start: %s, stop: %s)
+  |> filter(fn: (r) => r._measurement == "telemetry" and r.deviceId == %q and r.metric == %q and r._field == "value")
+  |> sort(columns: ["_time"])
+  |> limit(n: %d)`,
+		c.bucket,
+		start,
+		stop,
+		deviceID,
+		metric,
+		limit,
+	)
+
+	q := c.cli.QueryAPI(c.org)
+	result, err := q.Query(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("query telemetry series: %w", err)
+	}
+	defer result.Close()
+
+	points := make([]TelemetryPoint, 0)
+	for result.Next() {
+		record := result.Record()
+		value, ok := asFloat64(record.Value())
+		if !ok {
+			continue
+		}
+		points = append(points, TelemetryPoint{
+			Ts:    record.Time().Unix(),
+			Value: value,
+		})
+	}
+
+	if err := result.Err(); err != nil {
+		return nil, fmt.Errorf("query telemetry series result: %w", err)
+	}
+	return points, nil
 }
 
 func asInt64(value any) (int64, bool) {
