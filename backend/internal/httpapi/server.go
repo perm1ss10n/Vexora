@@ -10,15 +10,17 @@ import (
 
 	"github.com/perm1ss10n/vexora/backend/internal/auth"
 	"github.com/perm1ss10n/vexora/backend/internal/commands"
+	"github.com/perm1ss10n/vexora/backend/internal/influx"
 	"github.com/perm1ss10n/vexora/backend/internal/model"
 	"github.com/perm1ss10n/vexora/backend/internal/registry"
 )
 
 type Server struct {
-	cmd   *commands.Manager
-	auth  *auth.Store
-	token *auth.TokenService
-	reg   *registry.SQLiteStore
+	cmd    *commands.Manager
+	auth   *auth.Store
+	token  *auth.TokenService
+	reg    *registry.SQLiteStore
+	influx *influx.Client
 }
 
 type SendCmdRequest struct {
@@ -31,8 +33,8 @@ type SendCmdResponse struct {
 	Ack model.AckPayload `json:"ack"`
 }
 
-func New(cmd *commands.Manager, authStore *auth.Store, tokenService *auth.TokenService, registryStore *registry.SQLiteStore) *Server {
-	return &Server{cmd: cmd, auth: authStore, token: tokenService, reg: registryStore}
+func New(cmd *commands.Manager, authStore *auth.Store, tokenService *auth.TokenService, registryStore *registry.SQLiteStore, influxClient *influx.Client) *Server {
+	return &Server{cmd: cmd, auth: authStore, token: tokenService, reg: registryStore, influx: influxClient}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -48,6 +50,7 @@ func (s *Server) Handler() http.Handler {
 	}
 	if s.reg != nil && s.token != nil {
 		mux.Handle("/api/v1/devices", auth.RequireAuth(s.token, http.HandlerFunc(s.handleDevices)))
+		mux.Handle("/api/v1/devices/", auth.RequireAuth(s.token, http.HandlerFunc(s.handleDeviceDetail)))
 	}
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
@@ -57,15 +60,27 @@ func (s *Server) Handler() http.Handler {
 }
 
 type DeviceResponse struct {
-	DeviceID        string  `json:"deviceId"`
-	Status          string  `json:"status"`
-	LastSeen        string  `json:"lastSeen"`
-	LastTelemetryAt *string `json:"lastTelemetryAt"`
-	FWVersion       *string `json:"fwVersion"`
+	DeviceID  string  `json:"deviceId"`
+	Status    string  `json:"status"`
+	LastSeen  int64   `json:"lastSeen"`
+	FWVersion *string `json:"fwVersion"`
 }
 
-type DevicesResponse struct {
-	Devices []DeviceResponse `json:"devices"`
+type DeviceStateResponse struct {
+	Uptime int64  `json:"uptime"`
+	Link   string `json:"link"`
+	IP     string `json:"ip"`
+}
+
+type LastTelemetryResponse struct {
+	Ts      int64              `json:"ts"`
+	Metrics map[string]float64 `json:"metrics"`
+}
+
+type DeviceDetailResponse struct {
+	Device        DeviceResponse         `json:"device"`
+	State         *DeviceStateResponse   `json:"state"`
+	LastTelemetry *LastTelemetryResponse `json:"lastTelemetry"`
 }
 
 func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
@@ -81,19 +96,14 @@ func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response := DevicesResponse{Devices: make([]DeviceResponse, 0, len(devices))}
+	response := make([]DeviceResponse, 0, len(devices))
 	for _, device := range devices {
 		status := device.Status
 		if status == "" {
 			status = "offline"
 		}
 
-		lastSeen := time.UnixMilli(device.LastSeenMillis).UTC().Format(time.RFC3339)
-		var lastTelemetry *string
-		if device.TelemetryMillis.Valid {
-			value := time.UnixMilli(device.TelemetryMillis.Int64).UTC().Format(time.RFC3339)
-			lastTelemetry = &value
-		}
+		lastSeen := time.UnixMilli(device.LastSeenMillis).Unix()
 
 		var fwVersion *string
 		if device.FW.Valid {
@@ -103,16 +113,93 @@ func (s *Server) handleDevices(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		response.Devices = append(response.Devices, DeviceResponse{
-			DeviceID:        device.DeviceID,
-			Status:          status,
-			LastSeen:        lastSeen,
-			LastTelemetryAt: lastTelemetry,
-			FWVersion:       fwVersion,
+		response = append(response, DeviceResponse{
+			DeviceID:  device.DeviceID,
+			Status:    status,
+			LastSeen:  lastSeen,
+			FWVersion: fwVersion,
 		})
 	}
 
 	writeJSON(w, http.StatusOK, response)
+}
+
+func (s *Server) handleDeviceDetail(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	deviceID := strings.TrimPrefix(r.URL.Path, "/api/v1/devices/")
+	deviceID = strings.TrimSpace(deviceID)
+	if deviceID == "" || strings.Contains(deviceID, "/") {
+		http.Error(w, "bad path", http.StatusBadRequest)
+		return
+	}
+
+	device, err := s.reg.GetDevice(r.Context(), deviceID)
+	if err != nil {
+		log.Printf("[HTTP] get device failed: %v", err)
+		http.Error(w, "failed to get device", http.StatusInternalServerError)
+		return
+	}
+	if device == nil {
+		http.Error(w, "device not found", http.StatusNotFound)
+		return
+	}
+
+	status := device.Status
+	if status == "" {
+		status = "offline"
+	}
+
+	lastSeen := time.UnixMilli(device.LastSeenMillis).Unix()
+
+	var fwVersion *string
+	if device.FW.Valid {
+		value := device.FW.String
+		if value != "" {
+			fwVersion = &value
+		}
+	}
+
+	var state *DeviceStateResponse
+	if s.influx != nil {
+		lastState, err := s.influx.GetLastState(r.Context(), deviceID)
+		if err != nil {
+			log.Printf("[HTTP] get device state failed: %v", err)
+		} else if lastState != nil {
+			state = &DeviceStateResponse{
+				Uptime: lastState.Uptime,
+				Link:   lastState.Link,
+				IP:     lastState.IP,
+			}
+		}
+	}
+
+	var lastTelemetry *LastTelemetryResponse
+	if s.influx != nil {
+		telemetry, err := s.influx.GetLastTelemetry(r.Context(), deviceID)
+		if err != nil {
+			log.Printf("[HTTP] get device telemetry failed: %v", err)
+		} else if telemetry != nil {
+			lastTelemetry = &LastTelemetryResponse{
+				Ts:      telemetry.Ts,
+				Metrics: telemetry.Metrics,
+			}
+		}
+	}
+
+	writeJSON(w, http.StatusOK, DeviceDetailResponse{
+		Device: DeviceResponse{
+			DeviceID:  device.DeviceID,
+			Status:    status,
+			LastSeen:  lastSeen,
+			FWVersion: fwVersion,
+		},
+		State:         state,
+		LastTelemetry: lastTelemetry,
+	})
 }
 
 func (s *Server) handleDev(w http.ResponseWriter, r *http.Request) {

@@ -277,3 +277,32 @@ ORDER BY last_seen_ts DESC;`,
 	}
 	return devices, nil
 }
+
+func (s *SQLiteStore) GetDevice(ctx context.Context, deviceID string) (*DeviceRecord, error) {
+	if deviceID == "" {
+		return nil, nil
+	}
+
+	row := s.db.QueryRowContext(
+		ctx,
+		`SELECT device_id, status, last_seen_ts, last_telemetry_ts, fw
+FROM devices
+WHERE device_id = ?;`,
+		deviceID,
+	)
+
+	var record DeviceRecord
+	if err := row.Scan(
+		&record.DeviceID,
+		&record.Status,
+		&record.LastSeenMillis,
+		&record.TelemetryMillis,
+		&record.FW,
+	); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("registry get device: %w", err)
+	}
+	return &record, nil
+}
