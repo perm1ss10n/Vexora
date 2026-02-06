@@ -8,7 +8,7 @@ import { useDevices } from '@/features/devices/hooks';
 
 export function DevicesPage() {
   const navigate = useNavigate();
-  const { data = [], isLoading } = useDevices();
+  const { data = [], isLoading, isError, error } = useDevices();
   const [query, setQuery] = useState('');
 
   const filtered = useMemo(() => {
@@ -31,6 +31,12 @@ export function DevicesPage() {
         <CardContent>
           {isLoading ? (
             <p className="text-sm text-muted-foreground">Loading devices...</p>
+          ) : isError ? (
+            <p className="text-sm text-destructive">
+              {error instanceof Error ? error.message : 'Failed to load devices.'}
+            </p>
+          ) : data.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No devices registered yet.</p>
           ) : (
             <Table>
               <TableHeader>
@@ -38,7 +44,6 @@ export function DevicesPage() {
                   <TableHead>Device ID</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Last seen</TableHead>
-                  <TableHead>Last telemetry</TableHead>
                   <TableHead>FW version</TableHead>
                 </TableRow>
               </TableHeader>
@@ -56,12 +61,9 @@ export function DevicesPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground">
-                      {new Date(device.lastSeen).toLocaleString('ru-RU')}
+                      {new Date(device.lastSeen * 1000).toLocaleString('ru-RU')}
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {new Date(device.lastTelemetryTs).toLocaleString('ru-RU')}
-                    </TableCell>
-                    <TableCell>{device.fwVersion}</TableCell>
+                    <TableCell>{device.fwVersion ?? '—'}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

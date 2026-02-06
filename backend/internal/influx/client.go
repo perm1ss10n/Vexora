@@ -14,6 +14,8 @@ type Client struct {
 	cli      influxdb2.Client
 	writeAPI api.WriteAPI
 	done     chan struct{}
+	org      string
+	bucket   string
 }
 
 type Config struct {
@@ -51,6 +53,8 @@ func New(cfg Config) *Client {
 		cli:      cli,
 		writeAPI: w,
 		done:     make(chan struct{}),
+		org:      cfg.Org,
+		bucket:   cfg.Bucket,
 	}
 
 	// Логируем async ошибки записи

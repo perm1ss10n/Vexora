@@ -47,6 +47,12 @@ export default function App() {
           <Route path="settings" element={<SettingsPage />} />
         </Route>
       </Route>
+
+      <Route path="/telemetry" element={<ProtectedRoute />}>
+        <Route element={<AppLayout />}>
+          <Route index element={<TelemetryPage />} />
+        </Route>
+      </Route>
     </Routes>
   );
 }

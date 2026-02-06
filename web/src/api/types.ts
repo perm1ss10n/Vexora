@@ -3,26 +3,44 @@ export type DeviceStatus = 'online' | 'offline';
 export interface Device {
   deviceId: string;
   status: DeviceStatus;
-  lastSeen: string;
-  lastTelemetryTs: string;
-  fwVersion: string;
+  lastSeen: number;
+  fwVersion?: string | null;
 }
 
-export interface DeviceState {
-  status: DeviceStatus;
-  link: {
-    type: 'lte' | 'wifi' | 'ethernet';
-    rssi: number;
-    ip: string;
-  };
-  fw: string;
-  uptimeSec: number;
-  ts: string;
+export interface DeviceRuntimeState {
+  uptime: number;
+  link: string;
+  ip: string;
+}
+
+export interface DeviceTelemetrySnapshot {
+  ts: number;
+  metrics: Record<string, number>;
+}
+
+export type CfgStatus = 'unknown' | 'pending' | 'applied' | 'rejected' | 'rolled_back';
+
+export interface TelemetrySettings {
+  intervalMs: number;
+  minPublishMs: number;
+}
+
+export interface DeviceSettings {
+  telemetry: TelemetrySettings;
+  cfgStatus: CfgStatus;
 }
 
 export interface TelemetryPoint {
-  ts: string;
+  ts: number;
   value: number;
+}
+
+export interface TelemetrySeriesResponse {
+  deviceId: string;
+  metric: string;
+  from: number;
+  to: number;
+  points: TelemetryPoint[];
 }
 
 export interface Metric {
@@ -31,18 +49,15 @@ export interface Metric {
   label: string;
 }
 
-export interface CommandRequest {
-  id: string;
-  deviceId: string;
-  type: 'ping' | 'reboot' | 'get_state' | 'apply_cfg';
-  payload?: Record<string, string | number>;
-  createdAt: string;
-}
+export type CommandType = 'ping' | 'reboot' | 'get_state' | 'apply_cfg';
 
-export interface CommandResult {
+export interface CommandAck {
+  v: number;
   id: string;
   deviceId: string;
-  type: CommandRequest['type'];
-  status: 'sent' | 'acked' | 'error';
-  createdAt: string;
+  ts: number;
+  ok: boolean;
+  code?: string;
+  msg?: string;
+  data?: Record<string, unknown>;
 }
